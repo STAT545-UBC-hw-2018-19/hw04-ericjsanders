@@ -33,9 +33,9 @@ library(gapminder)
 
 The sections of this document are as follows:
 
-* Loading in and Checking the Data
+* Loading in and Checking the Data.
 * Reshaping Prompt: Computing summaries of life expectancy for all combinations of year and continent in the `gapminder` dataset.
-* Joining Prompt: Creating a second data set using `gapminder` and country latitudes and longitudes
+* Joining Prompt: Creating a second data set using `gapminder` and country latitudes and longitudes.
 
 # Loading in Data and Checking its Structure
 
@@ -79,7 +79,7 @@ head(sum.lifeExp)
 
 And we see that we appear to have properly calculated the five summary statistics of life expectancy for each continent and year combination. The next step would be easier if we had only one summary statistic -- we could make a column for each continent, and for each row (year) we would have the summary statistic.
 
-I decided to challenge myself to see how to most efficiently use a data set like this to create multiple data sets, where each data set contains one summary statistic in the desired format. In other words, instead of simply `spread`ing one summary statistic across continents, I wanted to `spread` by multiple different summary statistics one by one.
+I decided to challenge myself to see how to most efficiently use a data set like this to create multiple data sets, where each data set contains one summary statistic in the desired format. In other words, instead of simply spreading one summary statistic across continents, I wanted to `spread` by multiple different summary statistics one by one into their own data sets.
 
 After testing out some approaches, I decided to loop through the 5 summary statistics and alternate piping the summary data set into `select` and then into `spread`. The most efficient R code I created is as follows.
 
@@ -90,13 +90,13 @@ for(i in 1:length(sum.names)){
   name = sum.names[i]
   
   sum.lifeExp %>%
-    select(continent,year,paste(name)) %>% # Only take the summary statistic for this step of the 'for' loop
+    select(continent,year,paste(name)) %>% # Only take the summary statistic required for this step of the 'for' loop
     spread(key=continent,value=paste(name)) %>% # Make there be a column for each continent
     assign(paste('sum.',name,sep=''),.,envir=.GlobalEnv) # The assign function is used here to declare a new global variable with a name that is pasted and varies with the loop. This is useful when you want to declare a new object with a new name for every iteration of a 'for' loop.
 }
 ```
 
-Inside the `for` loop, for each type of summary statistic, a new data frame was created that has a column for year, and a column for each continent containing the summary statistic in question. The 5 created data frames have the names `sum.min`, `sum.quart1`, `sum.med`, `sum.quart3`, and `sum.max`. We can examine each in turn,
+Inside the `for` loop, for each summary statistic, a new data frame was created that has a column for year, and a column for each continent containing the summary statistic in question. The 5 created data frames have the names `sum.min`, `sum.quart1`, `sum.med`, `sum.quart3`, and `sum.max`. We can examine each in turn,
 
 ```{r}
 # Look at minimum life expectancies
@@ -129,7 +129,7 @@ ggplot(sum.lifeExp,aes(x=year))+
   theme(legend.position='none')
 ```
 
-The new tables are no good at creating similar plots, and would only be useful if you wanted to make a plot for a single continent at a time, not for making plots for multiple continents.
+The new tables are no good at creating similar plots, and would only be useful if you wanted to make a plot for a single continent at a time, and a single statistic at a time, which is much less useful.
 
 # Joining Prompt (Selected #1, Complementary Gapminder Dataset)
 
@@ -145,14 +145,14 @@ We see we now have, for 240 countries, a latitude and longitude matched with the
 
 Next, we hope to combine these country coordinates with some of our data contained in the gapminder data set.
 
-If we consider longitude, latitude, and ISO code as 'supplemental' to the gapminder data set, we may be inclined to do a left join of the coordinate data set onto the gapminder data set as follows
+If we consider longitude, latitude, and ISO code as 'supplemental' to the gapminder data set, we may be inclined to do a left join of the coordinate data set onto the gapminder data set as follows. Left joining means that the data set in the first argument gets added to with information in the data set of the second argument.
 
 ```{r}
 left.joined = left_join(gapminder,country.locations,by='country')
 str(left.joined)
 ```
 
-We see that there is now a latitude, longitude, and ISO code column added to our gapminder data set. However, let us see if there are any countries that were not matched between the data sets.
+We see that the gapminder data set has remianed the same, but there is now a latitude, longitude, and ISO code column added. However, let us see if there are any countries that were not matched between the data sets.
 
 ```{r}
 # Produce list of countries that did not get matching latitude and longitudes.
@@ -163,13 +163,13 @@ left.joined %>%
   unique()
 ```
 
-This is perhaps an indication of differences in naming conventions and syntax -- the gapminder dataset strangely uses short forms for republics, whereas it appears the country location dataset does not. Furthermore, it appears the data sets may have been published at different times, as they use different names for areas experiencing large amounts of war and border dispute.
+This is a list of countries that did not get entries for latitude and longitude. This is perhaps an indication of differences in naming conventions and syntax -- the gapminder dataset strangely uses short forms for republics, whereas it appears the country location dataset does not. Furthermore, it appears the data sets may have been published at different times, as they use different names for areas experiencing large amounts of war and border disputes.
 
 Whatever the reason, we conclude there are 12 countries that did not get matched and lack coordinate information now.
 
 We do however see that we have accurately added the information that is available (and if desired, we could manually correct country names to perhaps add even more information).
 
-Alternately to this approach, we may perhaps be working with the coordinate data set, and wish to supplement the country data with their population as of 2007. If this was the case, we may write it as the following.
+Alternately to this approach, we may perhaps be working with the coordinate data set, and wish to supplement the country data with their population as of 2007. If this was the case, we may write it as the following, so that it takes the country coordinate data set and adds a column with information gained from the gapminder data set.
 
 ```{r}
 right.joined = gapminder %>%
@@ -186,7 +186,7 @@ length(which(is.na(right.joined$pop))) # Countries with pop data
 length(which(!is.na(right.joined$pop))) # Countries w/o pop data
 ```
 
-So a little less than half of the countries we have coordinate data for were matched with 2007 populations.
+This shows that a little less than half of the countries we have coordinate data for were matched with 2007 populations from the gapminder data set.
 
 However, we are at least confident that the data that we **did** add was accurate and properly matched.
 
