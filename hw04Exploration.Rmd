@@ -1,0 +1,219 @@
+---
+title: "Stat545 Homework 4"
+author: "Eric Sanders"
+date: 'Submitted for 2018-10-09'
+header-includes:
+   - \usepackage{bbm}
+   - \usepackage{amsmath}
+   - \usepackage{amsfonts}
+   - \usepackage{amssymb}
+   - \usepackage{caption}
+   - \usepackage{tikz}
+   - \usepackage{textcomp}
+   - \usepackage{float}
+   - \usepackage{setspace}
+   - \doublespacing
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning=FALSE,message=FALSE)
+knitr::opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=FALSE)
+options(digits=2)
+options(scipen = 999)
+```
+
+In this document we present some data exploration completed using the `gapminder` dataset. We will use the packages `tidyverse`, `gapminder`, and `ggplot2`.
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(gapminder)
+```
+
+The sections of this document are as follows:
+
+* Loading in and Checking the Data
+* Reshaping Prompt: Computing summaries of life expectancy for all combinations of year and continent in the `gapminder` dataset.
+* Joining Prompt: Creating a second data set using `gapminder` and country latitudes and longitudes
+
+# Loading in Data and Checking its Structure
+
+First, we load the data
+
+```{r}
+# Call to preloaded data frame
+data(gapminder)
+attach(gapminder)
+```
+
+Next, we can look at some information on how this data set is organized.
+
+```{r}
+# Determine what we can about the object flchain
+str(gapminder)
+```
+
+And we can now see that `gapminder` is of class 'tbl_df' with 1704 rows and 6 columns. We have two variables that come defined as factors, `country` and `continent`, and the other 4 variables come defined as either numeric or integer objects.
+
+We can look at what the variables in our data set represent.
+
+* **country**: The country being examined.
+* **continent**: The continent that the country lies in.
+* **year**: The year under observation.
+* **lifeExp**: The life expectancy of the given country in the given year.
+* **pop**: The population of the country in the given year.
+* **gdpPercap**: The GDP per capita of the country in the given year.
+
+# Reshaping Prompt (Selected #3, Summarizing LifeExp in New Dataframes)
+
+We want first to calculate for each continent, for each year, some measure of life expectancy. We decide to use 5 summarizing statistics, the minimum, 1st quartile, median, third quartile, and maximum. Let us first create a new data frame to store this information in, using the `dplyr` functions `summarize` and `group_by`.
+
+```{r}
+sum.lifeExp = gapminder %>%
+  group_by(continent,year) %>%
+  summarize(min=min(lifeExp),quart1=quantile(lifeExp)[[2]],med=median(lifeExp),quart3=quantile(lifeExp)[[4]],max=max(lifeExp))
+
+head(sum.lifeExp)
+```
+
+And we see that we appear to have properly calculated the five summary statistics of life expectancy for each continent and year combination. The next step would be easier if we had only one summary statistic -- we could make a column for each continent, and for each row (year) we would have the summary statistic.
+
+I decided to challenge myself to see how to most efficiently use a data set like this to create multiple data sets, where each data set contains one summary statistic in the desired format. In other words, instead of simply `spread`ing one summary statistic across continents, I wanted to `spread` by multiple different summary statistics one by one.
+
+After testing out some approaches, I decided to loop through the 5 summary statistics and alternate piping the summary data set into `select` and then into `spread`. The most efficient R code I created is as follows.
+
+```{r}
+sum.names = c('min','quart1','med','quart3','max')
+
+for(i in 1:length(sum.names)){
+  name = sum.names[i]
+  
+  sum.lifeExp %>%
+    select(continent,year,paste(name)) %>% # Only take the summary statistic for this step of the 'for' loop
+    spread(key=continent,value=paste(name)) %>% # Make there be a column for each continent
+    assign(paste('sum.',name,sep=''),.,envir=.GlobalEnv) # The assign function is used here to declare a new global variable with a name that is pasted and varies with the loop. This is useful when you want to declare a new object with a new name for every iteration of a 'for' loop.
+}
+```
+
+Inside the `for` loop, for each type of summary statistic, a new data frame was created that has a column for year, and a column for each continent containing the summary statistic in question. The 5 created data frames have the names `sum.min`, `sum.quart1`, `sum.med`, `sum.quart3`, and `sum.max`. We can examine each in turn,
+
+```{r}
+# Look at minimum life expectancies
+knitr::kable(sum.min,caption='Minimum Life Expectancy')
+
+# Look at first quartile life expectancies
+knitr::kable(sum.quart1,caption='Lower Quartile Life Expectancy')
+
+# Look at median life expectancies
+knitr::kable(sum.med,caption='Median Life Expectancy')
+
+# Look at third quartile life expectancies
+knitr::kable(sum.quart3,caption='Upper Quartile Life Expectancy')
+
+# Look at maximum life expectancies
+knitr::kable(sum.max,caption='Maximum Life Expectancy')
+```
+
+If I wanted to form a plot from these values, I would say the data are **not** in a convenient form to do so. It is most convenient for `ggplot2` and base R to have an output value in one column, and factors in another column, instead of having different columns represent different levels of one factor. For example, if I wanted to plot life expectancy summaries over time in each continent, it is very simple to do with the data frame I created before reshaping, `sum.lifeExp`, as follows.
+
+```{r}
+ggplot(sum.lifeExp,aes(x=year))+
+  geom_line(aes(y=min),linetype='dashed')+ # Add dashed lines for minimum and maximum life expectancy in the year given
+  geom_line(aes(y=max),linetype='dashed')+
+  geom_ribbon(aes(ymin=quart1,ymax=quart3,fill=continent))+ # Add shaded area to mark interquartile area of life expectancy in the year given
+  geom_line(aes(y=med),size=2)+ # Add thick line for median life expectancy in year given
+  facet_wrap(~continent)+
+  ylab('Life Expectancy')+
+  xlab('Year')+
+  theme(legend.position='none')
+```
+
+The new tables are no good at creating similar plots, and would only be useful if you wanted to make a plot for a single continent at a time, not for making plots for multiple continents.
+
+# Joining Prompt (Selected #1, Complementary Gapminder Dataset)
+
+We can import the data published by Google and written as a CSV on Github as follows
+
+```{r}
+country.locations = read.csv('https://github.com/albertyw/avenews/raw/master/old/data/average-latitude-longitude-countries.csv',header=T)
+country.locations = rename(country.locations,country=Country)
+str(country.locations)
+```
+
+We see we now have, for 240 countries, a latitude and longitude matched with the country's ISO code as well as full country name.
+
+Next, we hope to combine these country coordinates with some of our data contained in the gapminder data set.
+
+If we consider longitude, latitude, and ISO code as 'supplemental' to the gapminder data set, we may be inclined to do a left join of the coordinate data set onto the gapminder data set as follows
+
+```{r}
+left.joined = left_join(gapminder,country.locations,by='country')
+str(left.joined)
+```
+
+We see that there is now a latitude, longitude, and ISO code column added to our gapminder data set. However, let us see if there are any countries that were not matched between the data sets.
+
+```{r}
+# Produce list of countries that did not get matching latitude and longitudes.
+left.joined %>%
+  filter(is.na(Latitude)) %>%
+  select(country) %>%
+  as.vector() %>%
+  unique()
+```
+
+This is perhaps an indication of differences in naming conventions and syntax -- the gapminder dataset strangely uses short forms for republics, whereas it appears the country location dataset does not. Furthermore, it appears the data sets may have been published at different times, as they use different names for areas experiencing large amounts of war and border dispute.
+
+Whatever the reason, we conclude there are 12 countries that did not get matched and lack coordinate information now.
+
+We do however see that we have accurately added the information that is available (and if desired, we could manually correct country names to perhaps add even more information).
+
+Alternately to this approach, we may perhaps be working with the coordinate data set, and wish to supplement the country data with their population as of 2007. If this was the case, we may write it as the following.
+
+```{r}
+right.joined = gapminder %>%
+  filter(year==2007) %>%
+  select(country,pop) %>%
+  right_join(country.locations,by='country')
+str(right.joined)
+```
+
+We see that we now have the original `country.locations` data set, but with a new population column that has filled in the 2007 population wherever it has matched country names. If we wonder how many countries did and did not get population data accurately from `gapminder`, we can calculate this as
+
+```{r}
+length(which(is.na(right.joined$pop))) # Countries with pop data
+length(which(!is.na(right.joined$pop))) # Countries w/o pop data
+```
+
+So a little less than half of the countries we have coordinate data for were matched with 2007 populations.
+
+However, we are at least confident that the data that we **did** add was accurate and properly matched.
+
+The past two examples have shown us that country naming conventions may cause headaches in cases where data are supposed to be combined, but we do have methods that can reliably at least correctly match the correct parts of partially matched data, and leave the rest for manual correction.
+
+I will now explore some examples which I believe **are not useful** for these data sets, because they are likely to cause confusion and improperly matched data.
+
+First, let us look at `full_join`. I will be using a filter to look at a few choice rows of the data set after it is full joined, to illustrate a point. The filter will pick out all the rows of the data set with 'Congo' in the country name, as you will be able to see that this was an issue when the data sets merged.
+
+```{r}
+full_join(country.locations,gapminder,by='country') %>%
+  filter(grepl('Congo',country))
+```
+
+We can see that when the data sets joined, because of a naming discrepancy, we now have multiple rows with many NA entries, and the latitudes and longitudes for Congo did not properly match up with the gapminder data.
+
+By using `full_join`, we have forced this naming issue, and this data set is no longer reliable or clean. When we used `left_join` and `right_join`, we had the benefit that the data sets would not force issues such as this upon us.
+
+Now, let us look at inner join. I will this time call the head of the data frame, and then, like last time, I will do the filter after searching for the 'Congo' entries.
+
+```{r}
+inner.join = inner_join(country.locations,gapminder,by='country')
+head(inner.join)
+
+filter(inner.join,grepl('Congo',country))
+```
+
+We see that the `inner_join` made a beautiful data set, as there are no NAs throughout, but when we called the filter there was no results, meaning we have now completely thrown away our information on Congo simply because of the mismatch in names.
+
+Overall, in cases such as this where there is a chance of naming mismatch, I would say that it is wildly more safe to use left_join or right_join (depending on which data set is the main data set and which is supplementing with more information) than to use full_join or inner_join, because you run the risk of throwing away data or butchering your data set if you use either of these.
